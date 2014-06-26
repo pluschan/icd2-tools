@@ -6,11 +6,15 @@ import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 
 def on_addrinfo_sig(*args):
+  """Handle addrinfo_sig signal and pass address information to printAddrInfo().
+  if -s was declared in argv, send a statistics_req signal.
+  """
   printAddrInfo(args)
   if '-s' in sys.argv:
     icd2.statistics_req(args[0], args[1], args[2], args[3], args[4], args[5])
 
 def parseSeconds(seconds):
+  """Parses given seconds and returns a string."""
   m , s  = divmod(seconds, 60)
   h , m  = divmod(m, 60)
   d , h  = divmod(h, 24)
@@ -43,24 +47,28 @@ def parseSeconds(seconds):
     return '%i seconds' % (s)
 
 def parseBytes(num):
-  for x in ['bytes','KB','MB','GB']:
+  """ Parses bytes and returns value in KB/MB/GB/etc. """
+  for x in [' bytes',' KB',' MB',' GB']:
     if num < 1024.0 and num > -1024.0:
       return "%3.1f%s" % (num, x)
     num /= 1024.0
-  return "%3.1f%s" % (num, 'TB')
+  return "%3.1f%s" % (num, ' TB')
 
 # (dbus.String(u''), dbus.UInt32(0L), dbus.String(u''), dbus.String(u'WLAN_INFRA'), dbus.UInt32(83888801L), dbus.ByteArray('7961cf3e-24f8-40a0-b80a-74a924d8babf\x00'), dbus.UInt32(1L), dbus.Int32(5), dbus.UInt32(11261L), 
 # dbus.UInt32(252327L))
 
 def on_statistics_sig(*args):
+  """Handle statistics_sig signal."""
   print 'Statistics for %s network "%s"' % (humanReadableNetworkType(args[3]), args[5])
   print 'Signal: %i / Active for %s' % (args[7], parseSeconds(args[6]))
   print '%s sent. %s received.' % (parseBytes(args[8]), parseBytes(args[9]))
 
 def printConnState(id, type, state):
+  """Helper function to print connection state."""
   print '%s connection "%s" %s.' % (type, id, state)
 
 def printAddrInfo(addrinfo):
+  """Parse addrinfo values and print in a human-readable form."""
   print 'Address information for %s connection "%s"' % (humanReadableNetworkType(addrinfo[3]), addrinfo[5])
   ip_info = addrinfo[6][0]
   print ':: IP Address: %s' % (ip_info[0])
@@ -71,6 +79,7 @@ def printAddrInfo(addrinfo):
   print ':: 3rd DNS Server: %s' % (ip_info[5])
 
 def humanReadableNetworkType(type):
+  """Return human readable network type."""
   return {
     'WLAN_INFRA': 'Infrastructure WiFi',
     'WLAN_ADHOC': 'Ad-Hoc WiFi',
@@ -78,6 +87,7 @@ def humanReadableNetworkType(type):
   }[type]
 
 def on_state_sig(*args):
+  """Handle state_sig signal."""
   if len(args) == 2:
     if args[1] == 8:
       print 'Phone started searching for %s networks.' % (humanReadableNetworkType(args[0]))
@@ -91,7 +101,7 @@ def on_state_sig(*args):
         printConnState(args[5], humanReadableNetworkType(args[3]), 'is connecting')
       elif args[7] == 2:
         printConnState(args[5], humanReadableNetworkType(args[3]), 'has connected')
-        if '-a' in sys.argv:
+        if '-a' in sys.argv: # If -a is specified, then make an addrinfo_req request.
           icd2.addrinfo_req(args[0], args[1], args[2], args[3], args[4], args[5])
       elif args[7] == 3:
         printConnState(args[5], humanReadableNetworkType(args[3]), 'is disconnecting')
@@ -106,22 +116,24 @@ def on_state_sig(*args):
   else:
     print 'E: Unknown state signal type.'
 
-DBusGMainLoop(set_as_default=True)
+if __name__ == '__main__':
 
-print 'ICD2 DBUS Connection Listener'
+  DBusGMainLoop(set_as_default=True)
 
-if '-h' in sys.argv:
-  print 'Usage: connMon [-a] [-s] [-h]'
-  print '-a : Show address information after connection.'
-  print '-s : Show statistics after connection.'
-  print '-h : This help.'
-else:
-  bus = dbus.SystemBus()
-  icd2_proxy = bus.get_object('com.nokia.icd2', '/com/nokia/icd2')
-  icd2 = dbus.Interface(icd2_proxy, 'com.nokia.icd2')
-  icd2.connect_to_signal('state_sig', on_state_sig, byte_arrays=True)
-  icd2.connect_to_signal('addrinfo_sig', on_addrinfo_sig, byte_arrays=True)
-  icd2.connect_to_signal('statistics_sig', on_statistics_sig, byte_arrays=True)
+  print 'ICD2 DBUS Connection Listener'
 
-  mainloop = glib.MainLoop()
-  mainloop.run()
+  if '-h' in sys.argv:
+    print 'Usage: connMon [-a] [-s] [-h]'
+    print '-a : Show address information after connection.'
+    print '-s : Show statistics after connection.'
+    print '-h : This help.'
+  else:
+    bus = dbus.SystemBus()
+    icd2_proxy = bus.get_object('com.nokia.icd2', '/com/nokia/icd2')
+    icd2 = dbus.Interface(icd2_proxy, 'com.nokia.icd2')
+    icd2.connect_to_signal('state_sig', on_state_sig, byte_arrays=True)
+    icd2.connect_to_signal('addrinfo_sig', on_addrinfo_sig, byte_arrays=True)
+    icd2.connect_to_signal('statistics_sig', on_statistics_sig, byte_arrays=True)
+
+    mainloop = glib.MainLoop()
+    mainloop.run()
